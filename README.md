@@ -20,7 +20,7 @@ android {
 
     defaultConfig {
         ...
-        minSdkVersion 21 // has to be < 24, if you have 24+ this hack is not needed
+        minSdkVersion 21 // has to be >= 21 and < 24, if you have 24+ this hack is not needed
         ...
     }
 
