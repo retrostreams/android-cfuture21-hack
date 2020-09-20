@@ -68,10 +68,9 @@ import java.util.concurrent.locks.ReentrantLock;
  * but doing so requires three further considerations: (1) Completion
  * of few if any <em>other</em> tasks should be dependent on a task
  * that blocks on external synchronization or I/O. Event-style async
- * tasks that are never joined (for example, those subclassing {@link
- * CntdCompleter}) often fall into this category.  (2) To minimize
- * resource impact, tasks should be small; ideally performing only the
- * (possibly) blocking action. (3) Unless the {@link
+ * tasks that are never joined often fall into this category.
+ * (2) To minimize resource impact, tasks should be small; ideally
+ * performing only the (possibly) blocking action. (3) Unless the {@link
  * FJPool.ManagedBlocker} API is used, or the number of possibly
  * blocked tasks is known to be less than the pool's level, the
  * pool cannot guarantee that enough threads will be available
@@ -105,9 +104,7 @@ import java.util.concurrent.locks.ReentrantLock;
  * particular style of fork/join processing, typically {@link
  * java.util.concurrent.RecursiveAction} for most computations that
  * do not return results, {@link java.util.concurrent.RecursiveTask}
- * for those that do, and {@link java.util.concurrent.CntdCompleter}
- * for those in which completed actions trigger other actions.
- * Normally, a concrete FJTask subclass declares
+ * for those that do. Normally, a concrete FJTask subclass declares
  * fields comprising its parameters, established in a constructor, and
  * then defines a {@code compute} method that somehow uses the control
  * methods supplied by this base class.
@@ -266,10 +263,7 @@ abstract class FJTask<V> implements Future<V>, Serializable {
      * @return status upon completion
      */
     private int externalAwaitDone() {
-        int s = ((this instanceof CntdCompleter) ? // try helping
-                 FJPool.common.externalHelpComplete(
-                     (CntdCompleter<?>)this, 0) :
-                 FJPool.common.tryExternalUnpush(this) ? doExec() : 0);
+        int s = FJPool.common.tryExternalUnpush(this) ? doExec() : 0;
         if (s >= 0 && (s = status) >= 0) {
             boolean interrupted = false;
             do {
@@ -301,10 +295,7 @@ abstract class FJTask<V> implements Future<V>, Serializable {
         if (Thread.interrupted())
             throw new InterruptedException();
         if ((s = status) >= 0 &&
-            (s = ((this instanceof CntdCompleter) ?
-                  FJPool.common.externalHelpComplete(
-                      (CntdCompleter<?>)this, 0) :
-                  FJPool.common.tryExternalUnpush(this) ? doExec() :
+            (s = (FJPool.common.tryExternalUnpush(this) ? doExec() :
                   0)) >= 0) {
             while ((s = status) >= 0) {
                 if (U.compareAndSwapInt(this, STATUS, s, s | SIGNAL)) {
@@ -719,10 +710,7 @@ abstract class FJTask<V> implements Future<V>, Serializable {
                 FJWorkerThread wt = (FJWorkerThread)t;
                 s = wt.pool.awaitJoin(wt.workQueue, this, deadline);
             }
-            else if ((s = ((this instanceof CntdCompleter) ?
-                           FJPool.common.externalHelpComplete(
-                               (CntdCompleter<?>)this, 0) :
-                           FJPool.common.tryExternalUnpush(this) ?
+            else if ((s = (FJPool.common.tryExternalUnpush(this) ?
                            doExec() : 0)) >= 0) {
                 long ns, ms; // measure in nanosecs, but wait in millisecs
                 while ((s = status) >= 0 &&

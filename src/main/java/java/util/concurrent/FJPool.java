@@ -954,53 +954,6 @@ class FJPool extends AbstractExecutorService {
             }
         }
 
-        /**
-         * Tries to steal and run tasks within the target's
-         * computation until done, not found, or limit exceeded.
-         *
-         * @param task root of CntdCompleter computation
-         * @param limit max runs, or zero for no limit
-         * @return task status on exit
-         */
-        final int localHelpCC(CntdCompleter<?> task, int limit) {
-            int status = 0;
-            if (task != null && (status = task.status) >= 0) {
-                for (;;) {
-                    boolean help = false;
-                    int b = base, s = top, al; FJTask<?>[] a;
-                    if ((a = array) != null && b != s && (al = a.length) > 0) {
-                        int index = (al - 1) & (s - 1);
-                        long offset = ((long)index << ASHIFT) + ABASE;
-                        FJTask<?> o = (FJTask<?>)
-                            U.getObject(a, offset);
-                        if (o instanceof CntdCompleter) {
-                            CntdCompleter<?> t = (CntdCompleter<?>)o;
-                            for (CntdCompleter<?> f = t;;) {
-                                if (f != task) {
-                                    if ((f = f.completer) == null) // try parent
-                                        break;
-                                }
-                                else {
-                                    if (U.compareAndSwapObject(a, offset,
-                                                               t, null)) {
-                                        top = s - 1;
-                                        MemBar.storeFence();
-                                        t.doExec();
-                                        help = true;
-                                    }
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                    if ((status = task.status) < 0 || !help ||
-                        (limit != 0 && --limit == 0))
-                        break;
-                }
-            }
-            return status;
-        }
-
         // Operations on shared queues
 
         /**
@@ -1031,53 +984,6 @@ class FJPool extends AbstractExecutorService {
                 }
             }
             return popped;
-        }
-
-        /**
-         * Shared version of localHelpCC.
-         */
-        final int sharedHelpCC(CntdCompleter<?> task, int limit) {
-            int status = 0;
-            if (task != null && (status = task.status) >= 0) {
-                for (;;) {
-                    boolean help = false;
-                    int b = base, s = top, al; FJTask<?>[] a;
-                    if ((a = array) != null && b != s && (al = a.length) > 0) {
-                        int index = (al - 1) & (s - 1);
-                        long offset = ((long)index << ASHIFT) + ABASE;
-                        FJTask<?> o = (FJTask<?>)
-                            U.getObject(a, offset);
-                        if (o instanceof CntdCompleter) {
-                            CntdCompleter<?> t = (CntdCompleter<?>)o;
-                            for (CntdCompleter<?> f = t;;) {
-                                if (f != task) {
-                                    if ((f = f.completer) == null)
-                                        break;
-                                }
-                                else {
-                                    if (U.compareAndSwapInt(this, PHASE,
-                                                            0, QLOCK)) {
-                                        if (top == s && array == a &&
-                                            U.compareAndSwapObject(a, offset,
-                                                                   t, null)) {
-                                            help = true;
-                                            top = s - 1;
-                                        }
-                                        U.putOrderedInt(this, PHASE, 0);
-                                        if (help)
-                                            t.doExec();
-                                    }
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                    if ((status = task.status) < 0 || !help ||
-                        (limit != 0 && --limit == 0))
-                        break;
-                }
-            }
-            return status;
         }
 
         /**
@@ -1662,9 +1568,7 @@ class FJPool extends AbstractExecutorService {
      */
     final int awaitJoin(WorkQueue w, FJTask<?> task, long deadline) {
         int s = 0;
-        if (w != null && task != null &&
-            (!(task instanceof CntdCompleter) ||
-             (s = w.localHelpCC((CntdCompleter<?>)task, 0)) >= 0)) {
+        if (w != null && task != null) {
             w.tryRemoveAndExec(task);
             int src = w.source, id = w.id;
             s = task.status;
@@ -1934,17 +1838,6 @@ class FJPool extends AbstractExecutorService {
                 (n = ws.length) > 0 &&
                 (w = ws[(n - 1) & r & SQMASK]) != null &&
                 w.trySharedUnpush(task));
-    }
-
-    /**
-     * Performs helpComplete for an external submitter.
-     */
-    final int externalHelpComplete(CntdCompleter<?> task, int maxTasks) {
-        int r = TLRandom.getProbe();
-        WorkQueue[] ws; WorkQueue w; int n;
-        return ((ws = workQueues) != null && (n = ws.length) > 0 &&
-                (w = ws[(n - 1) & r & SQMASK]) != null) ?
-            w.sharedHelpCC(task, maxTasks) : 0;
     }
 
     // Termination
