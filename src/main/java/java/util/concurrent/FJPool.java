@@ -96,17 +96,14 @@ import java.util.function.Predicate;
  *  </tr>
  *  <tr>
  *    <th scope="row" style="text-align:left"> Arrange async execution</th>
- *    <td> {@link #execute(FJTask)}</td>
  *    <td> {@link FJTask#fork}</td>
  *  </tr>
  *  <tr>
  *    <th scope="row" style="text-align:left"> Await and obtain result</th>
- *    <td> {@link #invoke(FJTask)}</td>
  *    <td> {@link FJTask#invoke}</td>
  *  </tr>
  *  <tr>
  *    <th scope="row" style="text-align:left"> Arrange exec and obtain Future</th>
- *    <td> {@link #submit(FJTask)}</td>
  *    <td> {@link FJTask#fork} (FJTasks <em>are</em> Futures)</td>
  *  </tr>
  * </table>
@@ -761,20 +758,6 @@ class FJPool extends AbstractExecutorService {
         }
 
         /**
-         * Provides a more accurate estimate of whether this queue has
-         * any tasks than does queueSize, by checking whether a
-         * near-empty queue has at least one unclaimed task.
-         */
-        final boolean isEmpty() {
-            FJTask<?>[] a; int n, al, b;
-            return ((n = (b = base) - top) >= 0 || // possibly one task
-                    (n == -1 && ((a = array) == null ||
-                                 (al = a.length) == 0 ||
-                                 a[(al - 1) & b] == null)));
-        }
-
-
-        /**
          * Pushes a task. Call only by owner in unshared queues.
          *
          * @param task the task. Caller must ensure non-null.
@@ -1179,7 +1162,7 @@ class FJPool extends AbstractExecutorService {
      * Creates a new FJWorkerThread. This factory is used unless
      * overridden in FJPool constructors.
      */
-    public static final ForkJoinWorkerThreadFactory
+    static final ForkJoinWorkerThreadFactory
         defaultForkJoinWorkerThreadFactory;
 
     /**
@@ -2219,197 +2202,6 @@ class FJPool extends AbstractExecutorService {
 
     // Constructors
 
-    /**
-     * Creates a {@code ForkJoinPool} with parallelism equal to {@link
-     * java.lang.Runtime#availableProcessors}, using defaults for all
-     * other parameters (see {@link #ForkJoinPool(int, ForkJoinWorkerThreadFactory,
-     * Thread.UncaughtExceptionHandler, boolean, int, int, int, Predicate, long,
-     * TimeUnit)}).
-     *
-     * @throws SecurityException if a security manager exists and
-     *         the caller is not permitted to modify threads
-     *         because it does not hold {@link
-     *         java.lang.RuntimePermission}{@code ("modifyThread")}
-     */
-    FJPool() {
-        this(Math.min(MAX_CAP, Runtime.getRuntime().availableProcessors()),
-             defaultForkJoinWorkerThreadFactory, null, false,
-             0, MAX_CAP, 1, null, DEFAULT_KEEPALIVE, TimeUnit.MILLISECONDS);
-    }
-
-    /**
-     * Creates a {@code ForkJoinPool} with the indicated parallelism
-     * level, using defaults for all other parameters (see {@link
-     * #ForkJoinPool(int, ForkJoinWorkerThreadFactory,
-     * Thread.UncaughtExceptionHandler, boolean, int, int, int, Predicate,
-     * long, TimeUnit)}).
-     *
-     * @param parallelism the parallelism level
-     * @throws IllegalArgumentException if parallelism less than or
-     *         equal to zero, or greater than implementation limit
-     * @throws SecurityException if a security manager exists and
-     *         the caller is not permitted to modify threads
-     *         because it does not hold {@link
-     *         java.lang.RuntimePermission}{@code ("modifyThread")}
-     */
-    FJPool(int parallelism) {
-        this(parallelism, defaultForkJoinWorkerThreadFactory, null, false,
-             0, MAX_CAP, 1, null, DEFAULT_KEEPALIVE, TimeUnit.MILLISECONDS);
-    }
-
-    /**
-     * Creates a {@code ForkJoinPool} with the given parameters (using
-     * defaults for others -- see {@link #ForkJoinPool(int,
-     * ForkJoinWorkerThreadFactory, Thread.UncaughtExceptionHandler, boolean,
-     * int, int, int, Predicate, long, TimeUnit)}).
-     *
-     * @param parallelism the parallelism level. For default value,
-     * use {@link java.lang.Runtime#availableProcessors}.
-     * @param factory the factory for creating new threads. For default value,
-     * use {@link #defaultForkJoinWorkerThreadFactory}.
-     * @param handler the handler for internal worker threads that
-     * terminate due to unrecoverable errors encountered while executing
-     * tasks. For default value, use {@code null}.
-     * @param asyncMode if true,
-     * establishes local first-in-first-out scheduling mode for forked
-     * tasks that are never joined. This mode may be more appropriate
-     * than default locally stack-based mode in applications in which
-     * worker threads only process event-style asynchronous tasks.
-     * For default value, use {@code false}.
-     * @throws IllegalArgumentException if parallelism less than or
-     *         equal to zero, or greater than implementation limit
-     * @throws NullPointerException if the factory is null
-     * @throws SecurityException if a security manager exists and
-     *         the caller is not permitted to modify threads
-     *         because it does not hold {@link
-     *         java.lang.RuntimePermission}{@code ("modifyThread")}
-     */
-    FJPool(int parallelism,
-                        ForkJoinWorkerThreadFactory factory,
-                        UncaughtExceptionHandler handler,
-                        boolean asyncMode) {
-        this(parallelism, factory, handler, asyncMode,
-             0, MAX_CAP, 1, null, DEFAULT_KEEPALIVE, TimeUnit.MILLISECONDS);
-    }
-
-    /**
-     * Creates a {@code ForkJoinPool} with the given parameters.
-     *
-     * @param parallelism the parallelism level. For default value,
-     * use {@link java.lang.Runtime#availableProcessors}.
-     *
-     * @param factory the factory for creating new threads. For
-     * default value, use {@link #defaultForkJoinWorkerThreadFactory}.
-     *
-     * @param handler the handler for internal worker threads that
-     * terminate due to unrecoverable errors encountered while
-     * executing tasks. For default value, use {@code null}.
-     *
-     * @param asyncMode if true, establishes local first-in-first-out
-     * scheduling mode for forked tasks that are never joined. This
-     * mode may be more appropriate than default locally stack-based
-     * mode in applications in which worker threads only process
-     * event-style asynchronous tasks.  For default value, use {@code
-     * false}.
-     *
-     * @param corePoolSize the number of threads to keep in the pool
-     * (unless timed out after an elapsed keep-alive). Normally (and
-     * by default) this is the same value as the parallelism level,
-     * but may be set to a larger value to reduce dynamic overhead if
-     * tasks regularly block. Using a smaller value (for example
-     * {@code 0}) has the same effect as the default.
-     *
-     * @param maximumPoolSize the maximum number of threads allowed.
-     * When the maximum is reached, attempts to replace blocked
-     * threads fail.  (However, because creation and termination of
-     * different threads may overlap, and may be managed by the given
-     * thread factory, this value may be transiently exceeded.)  To
-     * arrange the same value as is used by default for the common
-     * pool, use {@code 256} plus the {@code parallelism} level. (By
-     * default, the common pool allows a maximum of 256 spare
-     * threads.)  Using a value (for example {@code
-     * Integer.MAX_VALUE}) larger than the implementation's total
-     * thread limit has the same effect as using this limit (which is
-     * the default).
-     *
-     * @param minimumRunnable the minimum allowed number of core
-     * threads not blocked by a join or {@link ManagedBlocker}.  To
-     * ensure progress, when too few unblocked threads exist and
-     * unexecuted tasks may exist, new threads are constructed, up to
-     * the given maximumPoolSize.  For the default value, use {@code
-     * 1}, that ensures liveness.  A larger value might improve
-     * throughput in the presence of blocked activities, but might
-     * not, due to increased overhead.  A value of zero may be
-     * acceptable when submitted tasks cannot have dependencies
-     * requiring additional threads.
-     *
-     * @param saturate if non-null, a predicate invoked upon attempts
-     * to create more than the maximum total allowed threads.  By
-     * default, when a thread is about to block on a join or {@link
-     * ManagedBlocker}, but cannot be replaced because the
-     * maximumPoolSize would be exceeded, a {@link
-     * RejectedExecutionException} is thrown.  But if this predicate
-     * returns {@code true}, then no exception is thrown, so the pool
-     * continues to operate with fewer than the target number of
-     * runnable threads, which might not ensure progress.
-     *
-     * @param keepAliveTime the elapsed time since last use before
-     * a thread is terminated (and then later replaced if needed).
-     * For the default value, use {@code 60, TimeUnit.SECONDS}.
-     *
-     * @param unit the time unit for the {@code keepAliveTime} argument
-     *
-     * @throws IllegalArgumentException if parallelism is less than or
-     *         equal to zero, or is greater than implementation limit,
-     *         or if maximumPoolSize is less than parallelism,
-     *         of if the keepAliveTime is less than or equal to zero.
-     * @throws NullPointerException if the factory is null
-     * @throws SecurityException if a security manager exists and
-     *         the caller is not permitted to modify threads
-     *         because it does not hold {@link
-     *         java.lang.RuntimePermission}{@code ("modifyThread")}
-     * @since 9
-     */
-    FJPool(int parallelism,
-           ForkJoinWorkerThreadFactory factory,
-           UncaughtExceptionHandler handler,
-           boolean asyncMode,
-           int corePoolSize,
-           int maximumPoolSize,
-           int minimumRunnable,
-           Predicate<? super FJPool> saturate,
-           long keepAliveTime,
-           TimeUnit unit) {
-        // check, encode, pack parameters
-        if (parallelism <= 0 || parallelism > MAX_CAP ||
-            maximumPoolSize < parallelism || keepAliveTime <= 0L)
-            throw new IllegalArgumentException();
-        Utils.requireNonNull(factory);
-        long ms = Math.max(unit.toMillis(keepAliveTime), TIMEOUT_SLOP);
-
-        int corep = Math.min(Math.max(corePoolSize, parallelism), MAX_CAP);
-        long c = ((((long)(-corep)       << TC_SHIFT) & TC_MASK) |
-                  (((long)(-parallelism) << RC_SHIFT) & RC_MASK));
-        int m = parallelism | (asyncMode ? FIFO : 0);
-        int maxSpares = Math.min(maximumPoolSize, MAX_CAP) - parallelism;
-        int minAvail = Math.min(Math.max(minimumRunnable, 0), MAX_CAP);
-        int b = ((minAvail - parallelism) & SMASK) | (maxSpares << SWIDTH);
-        int n = (parallelism > 1) ? parallelism - 1 : 1; // at least 2 slots
-        n |= n >>> 1; n |= n >>> 2; n |= n >>> 4; n |= n >>> 8; n |= n >>> 16;
-        n = (n + 1) << 1; // power of two, including space for submission queues
-
-        this.workerNamePrefix = "ForkJoinPool-" + nextPoolId() + "-worker-";
-        this.workQueues = new WorkQueue[n];
-        this.factory = factory;
-        this.ueh = handler;
-        this.saturate = saturate;
-        this.keepAlive = ms;
-        this.bounds = b;
-        this.mode = m;
-        this.ctl = c;
-        checkPermission();
-    }
-
     private static Object newInstanceFromSystemProperty(String property)
         throws Exception {
         String className = System.getProperty(property);
@@ -2479,45 +2271,9 @@ class FJPool extends AbstractExecutorService {
      * @return the common pool instance
      * @since 1.8
      */
-    public static FJPool commonPool() {
+    static FJPool commonPool() {
         // assert common != null : "static init error";
         return common;
-    }
-
-    // Execution methods
-
-    /**
-     * Performs the given task, returning its result upon completion.
-     * If the computation encounters an unchecked Exception or Error,
-     * it is rethrown as the outcome of this invocation.  Rethrown
-     * exceptions behave in the same way as regular exceptions, but,
-     * when possible, contain stack traces (as displayed for example
-     * using {@code ex.printStackTrace()}) of both the current thread
-     * as well as the thread actually encountering the exception;
-     * minimally only the latter.
-     *
-     * @param task the task
-     * @param <T> the type of the task's result
-     * @return the task's result
-     * @throws NullPointerException if the task is null
-     * @throws RejectedExecutionException if the task cannot be
-     *         scheduled for execution
-     */
-    <T> T invoke(FJTask<T> task) {
-        externalSubmit(Utils.requireNonNull(task));
-        return task.join();
-    }
-
-    /**
-     * Arranges for (asynchronous) execution of the given task.
-     *
-     * @param task the task
-     * @throws NullPointerException if the task is null
-     * @throws RejectedExecutionException if the task cannot be
-     *         scheduled for execution
-     */
-    void execute(FJTask<?> task) {
-        externalSubmit(task);
     }
 
     // AbstractExecutorService methods
@@ -2535,20 +2291,6 @@ class FJPool extends AbstractExecutorService {
         else
             job = new FJTask.RunnableExecuteAction(task);
         externalSubmit(job);
-    }
-
-    /**
-     * Submits a FJTask for execution.
-     *
-     * @param task the task to submit
-     * @param <T> the type of the task's result
-     * @return the task
-     * @throws NullPointerException if the task is null
-     * @throws RejectedExecutionException if the task cannot be
-     *         scheduled for execution
-     */
-    <T> FJTask<T> submit(FJTask<T> task) {
-        return externalSubmit(task);
     }
 
     /**
@@ -2609,87 +2351,13 @@ class FJPool extends AbstractExecutorService {
     }
 
     /**
-     * Returns the handler for internal worker threads that terminate
-     * due to unrecoverable errors encountered while executing tasks.
-     *
-     * @return the handler, or {@code null} if none
-     */
-    public UncaughtExceptionHandler getUncaughtExceptionHandler() {
-        return ueh;
-    }
-
-    /**
-     * Returns the targeted parallelism level of this pool.
-     *
-     * @return the targeted parallelism level of this pool
-     */
-    public int getParallelism() {
-        int par = mode & SMASK;
-        return (par > 0) ? par : 1;
-    }
-
-    /**
      * Returns the targeted parallelism level of the common pool.
      *
      * @return the targeted parallelism level of the common pool
      * @since 1.8
      */
-    public static int getCommonPoolParallelism() {
+    static int getCommonPoolParallelism() {
         return COMMON_PARALLELISM;
-    }
-
-    /**
-     * Returns the number of worker threads that have started but not
-     * yet terminated.  The result returned by this method may differ
-     * from {@link #getParallelism} when threads are created to
-     * maintain parallelism when others are cooperatively blocked.
-     *
-     * @return the number of worker threads
-     */
-    public int getPoolSize() {
-        return ((mode & SMASK) + (short)(ctl >>> TC_SHIFT));
-    }
-
-    /**
-     * Returns {@code true} if this pool uses local first-in-first-out
-     * scheduling mode for forked tasks that are never joined.
-     *
-     * @return {@code true} if this pool uses async mode
-     */
-    public boolean getAsyncMode() {
-        return (mode & FIFO) != 0;
-    }
-
-    /**
-     * Returns an estimate of the number of worker threads that are
-     * not blocked waiting to join tasks or for other managed
-     * synchronization. This method may overestimate the
-     * number of running threads.
-     *
-     * @return the number of worker threads
-     */
-    public int getRunningThreadCount() {
-        int rc = 0;
-        WorkQueue[] ws; WorkQueue w;
-        if ((ws = workQueues) != null) {
-            for (int i = 1; i < ws.length; i += 2) {
-                if ((w = ws[i]) != null && w.isApparentlyUnblocked())
-                    ++rc;
-            }
-        }
-        return rc;
-    }
-
-    /**
-     * Returns an estimate of the number of threads that are currently
-     * stealing or executing tasks. This method may overestimate the
-     * number of active threads.
-     *
-     * @return the number of active threads
-     */
-    public int getActiveThreadCount() {
-        int r = (mode & SMASK) + (int)(ctl >> RC_SHIFT);
-        return (r <= 0) ? 0 : r; // suppress momentarily negative values
     }
 
     /**
@@ -2728,87 +2396,6 @@ class FJPool extends AbstractExecutorService {
                     return true;
             }
         }
-    }
-
-    /**
-     * Returns an estimate of the total number of completed tasks that
-     * were executed by a thread other than their submitter. The
-     * reported value underestimates the actual total number of steals
-     * when the pool is not quiescent. This value may be useful for
-     * monitoring and tuning fork/join programs: in general, steal
-     * counts should be high enough to keep threads busy, but low
-     * enough to avoid overhead and contention across threads.
-     *
-     * @return the number of steals
-     */
-    public long getStealCount() {
-        long count = stealCount;
-        WorkQueue[] ws; WorkQueue w;
-        if ((ws = workQueues) != null) {
-            for (int i = 1; i < ws.length; i += 2) {
-                if ((w = ws[i]) != null)
-                    count += (long)w.nsteals & 0xffffffffL;
-            }
-        }
-        return count;
-    }
-
-    /**
-     * Returns an estimate of the total number of tasks currently held
-     * in queues by worker threads (but not including tasks submitted
-     * to the pool that have not begun executing). This value is only
-     * an approximation, obtained by iterating across all threads in
-     * the pool. This method may be useful for tuning task
-     * granularities.
-     *
-     * @return the number of queued tasks
-     */
-    public long getQueuedTaskCount() {
-        long count = 0;
-        WorkQueue[] ws; WorkQueue w;
-        if ((ws = workQueues) != null) {
-            for (int i = 1; i < ws.length; i += 2) {
-                if ((w = ws[i]) != null)
-                    count += w.queueSize();
-            }
-        }
-        return count;
-    }
-
-    /**
-     * Returns an estimate of the number of tasks submitted to this
-     * pool that have not yet begun executing.  This method may take
-     * time proportional to the number of submissions.
-     *
-     * @return the number of queued submissions
-     */
-    public int getQueuedSubmissionCount() {
-        int count = 0;
-        WorkQueue[] ws; WorkQueue w;
-        if ((ws = workQueues) != null) {
-            for (int i = 0; i < ws.length; i += 2) {
-                if ((w = ws[i]) != null)
-                    count += w.queueSize();
-            }
-        }
-        return count;
-    }
-
-    /**
-     * Returns {@code true} if there are any tasks submitted to this
-     * pool that have not yet begun executing.
-     *
-     * @return {@code true} if there are any queued submissions
-     */
-    public boolean hasQueuedSubmissions() {
-        WorkQueue[] ws; WorkQueue w;
-        if ((ws = workQueues) != null) {
-            for (int i = 0; i < ws.length; i += 2) {
-                if ((w = ws[i]) != null && !w.isEmpty())
-                    return true;
-            }
-        }
-        return false;
     }
 
     /**
@@ -2923,24 +2510,6 @@ class FJPool extends AbstractExecutorService {
      */
     public boolean isTerminated() {
         return (mode & TERMINATED) != 0;
-    }
-
-    /**
-     * Returns {@code true} if the process of termination has
-     * commenced but not yet completed.  This method may be useful for
-     * debugging. A return of {@code true} reported a sufficient
-     * period after shutdown may indicate that submitted tasks have
-     * ignored or suppressed interruption, or are waiting for I/O,
-     * causing this executor not to properly terminate. (See the
-     * advisory notes for class {@link FJTask} stating that
-     * tasks should not normally entail blocking operations.  But if
-     * they do, they must abort them on interrupt.)
-     *
-     * @return {@code true} if terminating but not yet terminated
-     */
-    public boolean isTerminating() {
-        int md = mode;
-        return (md & STOP) != 0 && (md & TERMINATED) == 0;
     }
 
     /**

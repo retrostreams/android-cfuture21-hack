@@ -30,29 +30,26 @@ import java.util.concurrent.locks.ReentrantLock;
  * <p>A "main" {@code FJTask} begins execution when it is
  * explicitly submitted to a {@link FJPool}, or, if not already
  * engaged in a ForkJoin computation, commenced in the {@link
- * FJPool#commonPool()} via {@link #fork}, or
+ * FJPool#commonPool()} via {@code fork()}, or
  * related methods.  Once started, it will usually in turn start other
  * subtasks.  As indicated by the name of this class, many programs
- * using {@code FJTask} employ only methods {@link #fork} and
- * {@link #join}, or derivatives such as {@link
- * #invokeAll(FJTask...) invokeAll}.  However, this class also
- * provides a number of other methods that can come into play in
- * advanced usages, as well as extension mechanics that allow support
- * of new forms of fork/join processing.
+ * using {@code FJTask} employ only method {@code fork()}.
+ * However, this class also provides a number of other methods that
+ * can come into play in advanced usages, as well as extension
+ * mechanics that allow support of new forms of fork/join processing.
  *
  * <p>A {@code FJTask} is a lightweight form of {@link Future}.
  * The efficiency of {@code FJTask}s stems from a set of
  * restrictions (that are only partially statically enforceable)
  * reflecting their main use as computational tasks calculating pure
  * functions or operating on purely isolated objects.  The primary
- * coordination mechanisms are {@link #fork}, that arranges
- * asynchronous execution, and {@link #join}, that doesn't proceed
- * until the task's result has been computed.  Computations should
- * ideally avoid {@code synchronized} methods or blocks, and should
- * minimize other blocking synchronization apart from joining other
- * tasks or using synchronizers such as Phasers that are advertised to
- * cooperate with fork/join scheduling. Subdividable tasks should also
- * not perform blocking I/O, and should ideally access variables that
+ * coordination mechanism is {@code fork()}, that arranges
+ * asynchronous execution.  Computations should  ideally avoid
+ * {@code synchronized} methods or blocks, and should minimize other
+ * blocking synchronization apart from joining other tasks or using
+ * synchronizers such as Phasers that are advertised to cooperate
+ * with fork/join scheduling. Subdividable tasks should also not
+ * perform blocking I/O, and should ideally access variables that
  * are completely independent of those accessed by other running
  * tasks. These guidelines are loosely enforced by not permitting
  * checked exceptions such as {@code IOExceptions} to be
@@ -76,14 +73,11 @@ import java.util.concurrent.locks.ReentrantLock;
  * resource impact, tasks should be small; ideally performing only the
  * (possibly) blocking action. (3) Unless the {@link
  * FJPool.ManagedBlocker} API is used, or the number of possibly
- * blocked tasks is known to be less than the pool's {@link
- * FJPool#getParallelism} level, the pool cannot guarantee that
- * enough threads will be available to ensure progress or good
- * performance.
+ * blocked tasks is known to be less than the pool's level, the
+ * pool cannot guarantee that enough threads will be available
+ * to ensure progress or good performance.
  *
- * <p>The primary method for awaiting completion and extracting
- * results of a task is {@link #join}, but there are several variants:
- * The {@link Future#get} methods support interruptible and/or timed
+ * <p>The {@link Future#get} methods support interruptible and/or timed
  * waits for completion and report results using {@code Future}
  * conventions.  The "<em>quiet</em>" forms of
  * these methods do not extract results or report exceptions. These
@@ -118,15 +112,15 @@ import java.util.concurrent.locks.ReentrantLock;
  * then defines a {@code compute} method that somehow uses the control
  * methods supplied by this base class.
  *
- * <p>Method {@link #join} and its variants are appropriate for use
+ * <p>Method {@code join()} and its variants are appropriate for use
  * only when completion dependencies are acyclic; that is, the
  * parallel computation can be described as a directed acyclic graph
  * (DAG). Otherwise, executions may encounter a form of deadlock as
  * tasks cyclically wait for each other.  However, this framework
  * supports other methods and techniques (for example the use of
- * {@link java.util.concurrent.Phaser}, {@link #helpQuiesce}, and {@link #complete}) that
- * may be of use in constructing custom subclasses for problems that
- * are not statically structured as DAGs.
+ * {@link java.util.concurrent.Phaser} ) that may be of use in
+ * constructing custom subclasses for problems that are not statically
+ * structured as DAGs.
  *
  * <p>Most base support methods are {@code final}, to prevent
  * overriding of implementations that are intrinsically tied to the
@@ -444,16 +438,7 @@ abstract class FJTask<V> implements Future<V>, Serializable {
      * @return status on exit
      */
     private int setExceptionalCompletion(Throwable ex) {
-        int s = recordExceptionalCompletion(ex);
-        if ((s & DONE_MASK) == EXCEPTIONAL)
-            internalPropagateException(ex);
-        return s;
-    }
-
-    /**
-     * Hook for exception propagation support for tasks with completers.
-     */
-    void internalPropagateException(Throwable ex) {
+        return recordExceptionalCompletion(ex);
     }
 
     /**
@@ -468,37 +453,6 @@ abstract class FJTask<V> implements Future<V>, Serializable {
                 t.cancel(false);
             } catch (Throwable ignore) {
             }
-        }
-    }
-
-    /**
-     * Removes exception node and clears status.
-     */
-    private void clearExceptionalCompletion() {
-        int h = System.identityHashCode(this);
-        final ReentrantLock lock = exceptionTableLock;
-        lock.lock();
-        try {
-            ExceptionNode[] t = exceptionTable;
-            int i = h & (t.length - 1);
-            ExceptionNode e = t[i];
-            ExceptionNode pred = null;
-            while (e != null) {
-                ExceptionNode next = e.next;
-                if (e.get() == this) {
-                    if (pred == null)
-                        t[i] = next;
-                    else
-                        pred.next = next;
-                    break;
-                }
-                pred = e;
-                e = next;
-            }
-            expungeStaleExceptions();
-            status = 0;
-        } finally {
-            lock.unlock();
         }
     }
 
@@ -629,48 +583,6 @@ abstract class FJTask<V> implements Future<V>, Serializable {
     // public methods
 
     /**
-     * Arranges to asynchronously execute this task in the pool the
-     * current task is running in, if applicable, or using the {@link
-     * FJPool#commonPool()} if not {@link #inForkJoinPool}.  While
-     * it is not necessarily enforced, it is a usage error to fork a
-     * task more than once unless it has completed and been
-     * reinitialized.  Subsequent modifications to the state of this
-     * task or any data it operates on are not necessarily
-     * consistently observable by any thread other than the one
-     * executing it unless preceded by a call to {@link #join} or
-     * related methods, or a call to {@link #isDone} returning {@code
-     * true}.
-     *
-     * @return {@code this}, to simplify usage
-     */
-    final FJTask<V> fork() {
-        Thread t;
-        if ((t = Thread.currentThread()) instanceof FJWorkerThread)
-            ((FJWorkerThread)t).workQueue.push(this);
-        else
-            FJPool.common.externalPush(this);
-        return this;
-    }
-
-    /**
-     * Returns the result of the computation when it
-     * {@linkplain #isDone is done}.
-     * This method differs from {@link #get()} in that abnormal
-     * completion results in {@code RuntimeException} or {@code Error},
-     * not {@code ExecutionException}, and that interrupts of the
-     * calling thread do <em>not</em> cause the method to abruptly
-     * return by throwing {@code InterruptedException}.
-     *
-     * @return the computed result
-     */
-    final V join() {
-        int s;
-        if ((s = doJoin() & DONE_MASK) != NORMAL)
-            reportException(s);
-        return getRawResult();
-    }
-
-    /**
      * Commences performing this task, awaits its completion if
      * necessary, and returns its result, or throws an (unchecked)
      * {@code RuntimeException} or {@code Error} if the underlying
@@ -683,74 +595,6 @@ abstract class FJTask<V> implements Future<V>, Serializable {
         if ((s = doInvoke() & DONE_MASK) != NORMAL)
             reportException(s);
         return getRawResult();
-    }
-
-    /**
-     * Forks the given tasks, returning when {@code isDone} holds for
-     * each task or an (unchecked) exception is encountered, in which
-     * case the exception is rethrown. If more than one task
-     * encounters an exception, then this method throws any one of
-     * these exceptions. If any task encounters an exception, the
-     * other may be cancelled. However, the execution status of
-     * individual tasks is not guaranteed upon exceptional return. The
-     * status of each task may be obtained using {@link
-     * #getException()} and related methods to check if they have been
-     * cancelled, completed normally or exceptionally, or left
-     * unprocessed.
-     *
-     * @param t1 the first task
-     * @param t2 the second task
-     * @throws NullPointerException if any task is null
-     */
-    public static void invokeAll(FJTask<?> t1, FJTask<?> t2) {
-        int s1, s2;
-        t2.fork();
-        if ((s1 = t1.doInvoke() & DONE_MASK) != NORMAL)
-            t1.reportException(s1);
-        if ((s2 = t2.doJoin() & DONE_MASK) != NORMAL)
-            t2.reportException(s2);
-    }
-
-    /**
-     * Forks the given tasks, returning when {@code isDone} holds for
-     * each task or an (unchecked) exception is encountered, in which
-     * case the exception is rethrown. If more than one task
-     * encounters an exception, then this method throws any one of
-     * these exceptions. If any task encounters an exception, others
-     * may be cancelled. However, the execution status of individual
-     * tasks is not guaranteed upon exceptional return. The status of
-     * each task may be obtained using {@link #getException()} and
-     * related methods to check if they have been cancelled, completed
-     * normally or exceptionally, or left unprocessed.
-     *
-     * @param tasks the tasks
-     * @throws NullPointerException if any task is null
-     */
-    public static void invokeAll(FJTask<?>... tasks) {
-        Throwable ex = null;
-        int last = tasks.length - 1;
-        for (int i = last; i >= 0; --i) {
-            FJTask<?> t = tasks[i];
-            if (t == null) {
-                if (ex == null)
-                    ex = new NullPointerException();
-            }
-            else if (i != 0)
-                t.fork();
-            else if (t.doInvoke() < NORMAL && ex == null)
-                ex = t.getException();
-        }
-        for (int i = 1; i <= last; ++i) {
-            FJTask<?> t = tasks[i];
-            if (t != null) {
-                if (ex != null)
-                    t.cancel(false);
-                else if (t.doJoin() < NORMAL)
-                    ex = t.getException();
-            }
-        }
-        if (ex != null)
-            rethrow(ex);
     }
 
     /**
@@ -824,29 +668,6 @@ abstract class FJTask<V> implements Future<V>, Serializable {
         setExceptionalCompletion((ex instanceof RuntimeException) ||
                                  (ex instanceof Error) ? ex :
                                  new RuntimeException(ex));
-    }
-
-    /**
-     * Completes this task, and if not already aborted or cancelled,
-     * returning the given value as the result of subsequent
-     * invocations of {@code join} and related operations. This method
-     * may be used to provide results for asynchronous tasks, or to
-     * provide alternative handling for tasks that would not otherwise
-     * complete normally. Its use in other situations is
-     * discouraged. This method is overridable, but overridden
-     * versions must invoke {@code super} implementation to maintain
-     * guarantees.
-     *
-     * @param value the result value for this task
-     */
-    public void complete(V value) {
-        try {
-            setRawResult(value);
-        } catch (Throwable rex) {
-            setExceptionalCompletion(rex);
-            return;
-        }
-        setCompletion(NORMAL);
     }
 
     /**
@@ -953,61 +774,6 @@ abstract class FJTask<V> implements Future<V>, Serializable {
     }
 
     /**
-     * Possibly executes tasks until the pool hosting the current task
-     * {@linkplain FJPool#isQuiescent is quiescent}.  This
-     * method may be of use in designs in which many tasks are forked,
-     * but none are explicitly joined, instead executing them until
-     * all are processed.
-     */
-    public static void helpQuiesce() {
-        Thread t;
-        if ((t = Thread.currentThread()) instanceof FJWorkerThread) {
-            FJWorkerThread wt = (FJWorkerThread)t;
-            wt.pool.helpQuiescePool(wt.workQueue);
-        }
-        else
-            FJPool.quiesceCommonPool();
-    }
-
-    /**
-     * Resets the internal bookkeeping state of this task, allowing a
-     * subsequent {@code fork}. This method allows repeated reuse of
-     * this task, but only if reuse occurs when this task has either
-     * never been forked, or has been forked, then completed and all
-     * outstanding joins of this task have also completed. Effects
-     * under any other usage conditions are not guaranteed.
-     * This method may be useful when executing
-     * pre-constructed trees of subtasks in loops.
-     *
-     * <p>Upon completion of this method, {@code isDone()} reports
-     * {@code false}, and {@code getException()} reports {@code
-     * null}. However, the value returned by {@code getRawResult} is
-     * unaffected. To clear this value, you can invoke {@code
-     * setRawResult(null)}.
-     */
-    public void reinitialize() {
-        if ((status & DONE_MASK) == EXCEPTIONAL)
-            clearExceptionalCompletion();
-        else
-            status = 0;
-    }
-
-    /**
-     * Returns the pool hosting the current thread, or {@code null}
-     * if the current thread is executing outside of any FJPool.
-     *
-     * <p>This method returns {@code null} if and only if {@link
-     * #inForkJoinPool} returns {@code false}.
-     *
-     * @return the pool, or {@code null} if none
-     */
-    public static FJPool getPool() {
-        Thread t = Thread.currentThread();
-        return (t instanceof FJWorkerThread) ?
-            ((FJWorkerThread) t).pool : null;
-    }
-
-    /**
      * Returns {@code true} if the current thread is a {@link
      * FJWorkerThread} executing as a FJPool computation.
      *
@@ -1015,59 +781,8 @@ abstract class FJTask<V> implements Future<V>, Serializable {
      * FJWorkerThread} executing as a FJPool computation,
      * or {@code false} otherwise
      */
-    public static boolean inForkJoinPool() {
+    static boolean inForkJoinPool() {
         return Thread.currentThread() instanceof FJWorkerThread;
-    }
-
-    /**
-     * Tries to unschedule this task for execution. This method will
-     * typically (but is not guaranteed to) succeed if this task is
-     * the most recently forked task by the current thread, and has
-     * not commenced executing in another thread.  This method may be
-     * useful when arranging alternative local processing of tasks
-     * that could have been, but were not, stolen.
-     *
-     * @return {@code true} if unforked
-     */
-    public boolean tryUnfork() {
-        Thread t;
-        return (((t = Thread.currentThread()) instanceof FJWorkerThread) ?
-                ((FJWorkerThread)t).workQueue.tryUnpush(this) :
-                FJPool.common.tryExternalUnpush(this));
-    }
-
-    /**
-     * Returns an estimate of the number of tasks that have been
-     * forked by the current worker thread but not yet executed. This
-     * value may be useful for heuristic decisions about whether to
-     * fork other tasks.
-     *
-     * @return the number of tasks
-     */
-    public static int getQueuedTaskCount() {
-        Thread t; FJPool.WorkQueue q;
-        if ((t = Thread.currentThread()) instanceof FJWorkerThread)
-            q = ((FJWorkerThread)t).workQueue;
-        else
-            q = FJPool.commonSubmitterQueue();
-        return (q == null) ? 0 : q.queueSize();
-    }
-
-    /**
-     * Returns an estimate of how many more locally queued tasks are
-     * held by the current worker thread than there are other worker
-     * threads that might steal them, or zero if this thread is not
-     * operating in a FJPool. This value may be useful for
-     * heuristic decisions about whether to fork other tasks. In many
-     * usages of ForkJoinTasks, at steady state, each worker should
-     * aim to maintain a small constant surplus (for example, 3) of
-     * tasks, and to process computations locally if this threshold is
-     * exceeded.
-     *
-     * @return the surplus number of tasks, which may be negative
-     */
-    public static int getSurplusQueuedTaskCount() {
-        return FJPool.getSurplusQueuedTaskCount();
     }
 
     // Extension methods
@@ -1106,80 +821,6 @@ abstract class FJTask<V> implements Future<V>, Serializable {
      * @return {@code true} if this task is known to have completed normally
      */
     protected abstract boolean exec();
-
-    /**
-     * Returns, but does not unschedule or execute, a task queued by
-     * the current thread but not yet executed, if one is immediately
-     * available. There is no guarantee that this task will actually
-     * be polled or executed next. Conversely, this method may return
-     * null even if a task exists but cannot be accessed without
-     * contention with other threads.  This method is designed
-     * primarily to support extensions, and is unlikely to be useful
-     * otherwise.
-     *
-     * @return the next task, or {@code null} if none are available
-     */
-    protected static FJTask<?> peekNextLocalTask() {
-        Thread t; FJPool.WorkQueue q;
-        if ((t = Thread.currentThread()) instanceof FJWorkerThread)
-            q = ((FJWorkerThread)t).workQueue;
-        else
-            q = FJPool.commonSubmitterQueue();
-        return (q == null) ? null : q.peek();
-    }
-
-    /**
-     * Unschedules and returns, without executing, the next task
-     * queued by the current thread but not yet executed, if the
-     * current thread is operating in a FJPool.  This method is
-     * designed primarily to support extensions, and is unlikely to be
-     * useful otherwise.
-     *
-     * @return the next task, or {@code null} if none are available
-     */
-    protected static FJTask<?> pollNextLocalTask() {
-        Thread t;
-        return ((t = Thread.currentThread()) instanceof FJWorkerThread) ?
-            ((FJWorkerThread)t).workQueue.nextLocalTask() :
-            null;
-    }
-
-    /**
-     * If the current thread is operating in a FJPool,
-     * unschedules and returns, without executing, the next task
-     * queued by the current thread but not yet executed, if one is
-     * available, or if not available, a task that was forked by some
-     * other thread, if available. Availability may be transient, so a
-     * {@code null} result does not necessarily imply quiescence of
-     * the pool this task is operating in.  This method is designed
-     * primarily to support extensions, and is unlikely to be useful
-     * otherwise.
-     *
-     * @return a task, or {@code null} if none are available
-     */
-    protected static FJTask<?> pollTask() {
-        Thread t; FJWorkerThread wt;
-        return ((t = Thread.currentThread()) instanceof FJWorkerThread) ?
-            (wt = (FJWorkerThread)t).pool.nextTaskFor(wt.workQueue) :
-            null;
-    }
-
-    /**
-     * If the current thread is operating in a FJPool,
-     * unschedules and returns, without executing, a task externally
-     * submitted to the pool, if one is available. Availability may be
-     * transient, so a {@code null} result does not necessarily imply
-     * quiescence of the pool.  This method is designed primarily to
-     * support extensions, and is unlikely to be useful otherwise.
-     *
-     * @return a task, or {@code null} if none are available
-     * @since 9
-     */
-    protected static FJTask<?> pollSubmission() {
-        Thread t;
-        return ((t = Thread.currentThread()) instanceof FJWorkerThread) ?
-            ((FJWorkerThread)t).pool.pollSubmission() : null;
-    }
 
     // tag operations
 
@@ -1293,46 +934,6 @@ abstract class FJTask<V> implements Future<V>, Serializable {
             return super.toString() + "[Wrapped task = " + callable + "]";
         }
         private static final long serialVersionUID = 2838392045355241008L;
-    }
-
-    /**
-     * Returns a new {@code FJTask} that performs the {@code run}
-     * method of the given {@code Runnable} as its action, and returns
-     * a null result upon {@link #join}.
-     *
-     * @param runnable the runnable action
-     * @return the task
-     */
-    public static FJTask<?> adapt(Runnable runnable) {
-        return new AdaptedRunnableAction(runnable);
-    }
-
-    /**
-     * Returns a new {@code FJTask} that performs the {@code run}
-     * method of the given {@code Runnable} as its action, and returns
-     * the given result upon {@link #join}.
-     *
-     * @param runnable the runnable action
-     * @param result the result upon completion
-     * @param <T> the type of the result
-     * @return the task
-     */
-    public static <T> FJTask<T> adapt(Runnable runnable, T result) {
-        return new AdaptedRunnable<T>(runnable, result);
-    }
-
-    /**
-     * Returns a new {@code FJTask} that performs the {@code call}
-     * method of the given {@code Callable} as its action, and returns
-     * its result upon {@link #join}, translating any checked exceptions
-     * encountered into {@code RuntimeException}.
-     *
-     * @param callable the callable action
-     * @param <T> the type of the callable's result
-     * @return the task
-     */
-    public static <T> FJTask<T> adapt(Callable<? extends T> callable) {
-        return new AdaptedCallable<T>(callable);
     }
 
     // Serialization support

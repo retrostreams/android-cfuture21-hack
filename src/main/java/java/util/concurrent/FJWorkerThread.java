@@ -47,48 +47,15 @@ class FJWorkerThread extends Thread {
     final FJPool.WorkQueue workQueue; // work-stealing mechanics
 
     /**
-     * Creates a FJWorkerThread operating in the given pool.
-     *
-     * @param pool the pool this thread works in
-     * @throws NullPointerException if pool is null
-     */
-    protected FJWorkerThread(FJPool pool) {
-        // Use a placeholder until a useful name can be set in registerWorker
-        super(NAME_PLACEHOLDER);
-        this.pool = pool;
-        this.workQueue = pool.registerWorker(this);
-    }
-
-    /**
      * Version for use by the default pool.  This is a
      * separate constructor to avoid affecting the
      * protected constructor.
      */
     FJWorkerThread(FJPool pool, ClassLoader ccl) {
-        this(pool);
-    }
-
-    /**
-     * Returns the pool hosting this thread.
-     *
-     * @return the pool
-     */
-    public FJPool getPool() {
-        return pool;
-    }
-
-    /**
-     * Returns the unique index number of this thread in its pool.
-     * The returned value ranges from zero to the maximum number of
-     * threads (minus one) that may exist in the pool, and does not
-     * change during the lifetime of the thread.  This method may be
-     * useful for applications that track status or collect results
-     * per-worker-thread rather than per-task.
-     *
-     * @return the index number
-     */
-    public int getPoolIndex() {
-        return workQueue.getPoolIndex();
+        // Use a placeholder until a useful name can be set in registerWorker
+        super(NAME_PLACEHOLDER);
+        this.pool = pool;
+        this.workQueue = pool.registerWorker(this);
     }
 
     /**
