@@ -60,15 +60,12 @@ class FJWorkerThread extends Thread {
     }
 
     /**
-     * Version for use by the default pool.  Supports setting the
-     * context class loader.  This is a separate constructor to avoid
-     * affecting the protected constructor.
+     * Version for use by the default pool.  This is a
+     * separate constructor to avoid affecting the
+     * protected constructor.
      */
     FJWorkerThread(FJPool pool, ClassLoader ccl) {
-        super(NAME_PLACEHOLDER);
-        TLRandom.setContextClassLoader(this, ccl);
-        this.pool = pool;
-        this.workQueue = pool.registerWorker(this);
+        this(pool);
     }
 
     /**

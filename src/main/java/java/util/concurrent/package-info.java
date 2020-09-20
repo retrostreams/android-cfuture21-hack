@@ -25,7 +25,7 @@
 
 /**
  * Covers a backport of the upgraded (JEP 266) Java 9 CompletableFuture API
- * for Java 6 to 8 and Android developers.
+ * for Android API levels 21 to 23.
  * 
  * See <a href="http://openjdk.java.net/jeps/266">JEP 266: More Concurrency Updates</a>.
  * 
