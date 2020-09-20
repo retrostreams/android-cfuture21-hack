@@ -6,7 +6,7 @@
 	<version>1.0.1</version>
 	<name>net.sourceforge.streamsupport:android-cfuture21-hack</name>
 	<description>An unsupported hackish attempt to provide CompletableFuture on Android
- API level 21 in conjunction with google/desugar_jdk_libs and Gradle 4.x</description>
+ API level 21 to level 23 in conjunction with google/desugar_jdk_libs and Gradle 4.x</description>
 	<url>http://github.com/retrostreams/android-cfuture21-hack/</url>
 	<licenses>
 		<license>

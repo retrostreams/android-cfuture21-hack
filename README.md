@@ -3,7 +3,7 @@
 
 # android-cfuture21-hack
 
-An unsupported hackish attempt to provide CompletableFuture on Android API level 21 in conjunction with google/desugar_jdk_libs and Gradle 4.x
+An unsupported hackish attempt to provide CompletableFuture on Android API level 21 to level 23 in conjunction with google/desugar_jdk_libs and Gradle 4.x
 
 Android Studio will display an error "Call requires API level 24 (current min is 21)". This error is just a warning that can be ignored. If you want to get rid of the error, just add `@SuppressLint("NewApi")` to your code.
 
