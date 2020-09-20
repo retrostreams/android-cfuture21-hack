@@ -33,7 +33,7 @@ android {
 
 dependencies {
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:1.0.10'
-    implementation 'net.sourceforge.streamsupport:android-cfuture21-hack:1.0.1'
+    implementation 'net.sourceforge.streamsupport:android-cfuture21-hack:1.0.2'
 }
 ```
 
