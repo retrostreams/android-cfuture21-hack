@@ -59,29 +59,6 @@ class FJWorkerThread extends Thread {
     }
 
     /**
-     * Initializes internal state after construction but before
-     * processing any tasks. If you override this method, you must
-     * invoke {@code super.onStart()} at the beginning of the method.
-     * Initialization requires care: Most fields must have legal
-     * default values, to ensure that attempted accesses from other
-     * threads work correctly even before this thread starts
-     * processing tasks.
-     */
-    protected void onStart() {
-    }
-
-    /**
-     * Performs cleanup associated with termination of this worker
-     * thread.  If you override this method, you must invoke
-     * {@code super.onTermination} at the end of the overridden method.
-     *
-     * @param exception the exception causing this thread to abort due
-     * to an unrecoverable error, or {@code null} if completed normally
-     */
-    protected void onTermination(Throwable exception) {
-    }
-
-    /**
      * This method is required to be public, but should never be
      * called explicitly. It performs the main run loop to execute
      * {@link FJTask}s.
@@ -90,20 +67,11 @@ class FJWorkerThread extends Thread {
         if (workQueue.array == null) { // only run once
             Throwable exception = null;
             try {
-                onStart();
                 pool.runWorker(workQueue);
             } catch (Throwable ex) {
                 exception = ex;
             } finally {
-                try {
-                    onTermination(exception);
-                } catch (Throwable ex) {
-                    if (exception == null) {
-                        exception = ex;
-                    }
-                } finally {
-                    pool.deregisterWorker(this, exception);
-                }
+                pool.deregisterWorker(this, exception);
             }
         }
     }

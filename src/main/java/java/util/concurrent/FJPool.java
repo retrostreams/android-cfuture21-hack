@@ -743,13 +743,6 @@ class FJPool extends AbstractExecutorService {
         }
 
         /**
-         * Returns an exportable index (used by FJWorkerThread).
-         */
-        final int getPoolIndex() {
-            return (id & 0xffff) >>> 1; // ignore odd/even tag bit
-        }
-
-        /**
          * Returns the approximate number of tasks in the queue.
          */
         final int queueSize() {
@@ -811,27 +804,6 @@ class FJPool extends AbstractExecutorService {
         }
 
         /**
-         * Takes next task, if one exists, in LIFO order.  Call only
-         * by owner in unshared queues.
-         */
-        final FJTask<?> pop() {
-            int b = base, s = top, al, i; FJTask<?>[] a;
-            if ((a = array) != null && b != s && (al = a.length) > 0) {
-                int index = (al - 1) & --s;
-                long offset = ((long)index << ASHIFT) + ABASE;
-                FJTask<?> t = (FJTask<?>)
-                    U.getObject(a, offset);
-                if (t != null &&
-                    U.compareAndSwapObject(a, offset, t, null)) {
-                    top = s;
-                    MemBar.storeFence();
-                    return t;
-                }
-            }
-            return null;
-        }
-
-        /**
          * Takes next task, if one exists, in FIFO order.
          */
         final FJTask<?> poll() {
@@ -858,23 +830,6 @@ class FJPool extends AbstractExecutorService {
                     break;
             }
             return null;
-        }
-
-        /**
-         * Takes next task, if one exists, in order specified by mode.
-         */
-        final FJTask<?> nextLocalTask() {
-            return ((id & FIFO) != 0) ? poll() : pop();
-        }
-
-        /**
-         * Returns next task, if one exists, in order specified by mode.
-         */
-        final FJTask<?> peek() {
-            int al; FJTask<?>[] a;
-            return ((a = array) != null && (al = a.length) > 0) ?
-                a[(al - 1) &
-                  ((id & FIFO) != 0 ? base : top - 1)] : null;
         }
 
         /**
@@ -1191,19 +1146,6 @@ class FJPool extends AbstractExecutorService {
      * Limit on spare thread construction in tryCompensate.
      */
     private static final int COMMON_MAX_SPARES;
-
-    /**
-     * Sequence number for creating workerNamePrefix.
-     */
-    private static int poolNumberSequence;
-
-    /**
-     * Returns the next sequence number. We don't expect this to
-     * ever contend, so use simple builtin sync.
-     */
-    private static final synchronized int nextPoolId() {
-        return ++poolNumberSequence;
-    }
 
     // static configuration constants
 
@@ -1890,20 +1832,6 @@ class FJPool extends AbstractExecutorService {
         return null;
     }
 
-    /**
-     * Gets and removes a local or stolen task for the given worker.
-     *
-     * @return a task, if available
-     */
-    final FJTask<?> nextTaskFor(WorkQueue w) {
-        FJTask<?> t;
-        if (w != null &&
-            (t = (w.id & FIFO) != 0 ? w.poll() : w.pop()) != null)
-            return t;
-        else
-            return pollScan(false);
-    }
-
     // External operations
 
     /**
@@ -1997,18 +1925,6 @@ class FJPool extends AbstractExecutorService {
     }
 
     /**
-     * Returns common pool queue for an external thread.
-     */
-    static WorkQueue commonSubmitterQueue() {
-        FJPool p = common;
-        int r = TLRandom.getProbe();
-        WorkQueue[] ws; int n;
-        return (p != null && (ws = p.workQueues) != null &&
-                (n = ws.length) > 0) ?
-            ws[(n - 1) & r & SQMASK] : null;
-    }
-
-    /**
      * Performs tryUnpush for an external submitter.
      */
     final boolean tryExternalUnpush(FJTask<?> task) {
@@ -2029,80 +1945,6 @@ class FJPool extends AbstractExecutorService {
         return ((ws = workQueues) != null && (n = ws.length) > 0 &&
                 (w = ws[(n - 1) & r & SQMASK]) != null) ?
             w.sharedHelpCC(task, maxTasks) : 0;
-    }
-
-    /**
-     * Tries to steal and run tasks within the target's computation.
-     * The maxTasks argument supports external usages; internal calls
-     * use zero, allowing unbounded steps (external calls trap
-     * non-positive values).
-     *
-     * @param w caller
-     * @param maxTasks if non-zero, the maximum number of other tasks to run
-     * @return task status on exit
-     */
-    final int helpComplete(WorkQueue w, CntdCompleter<?> task,
-                           int maxTasks) {
-        return (w == null) ? 0 : w.localHelpCC(task, maxTasks);
-    }
-
-    /**
-     * Returns a cheap heuristic guide for task partitioning when
-     * programmers, frameworks, tools, or languages have little or no
-     * idea about task granularity.  In essence, by offering this
-     * method, we ask users only about tradeoffs in overhead vs
-     * expected throughput and its variance, rather than how finely to
-     * partition tasks.
-     *
-     * In a steady state strict (tree-structured) computation, each
-     * thread makes available for stealing enough tasks for other
-     * threads to remain active. Inductively, if all threads play by
-     * the same rules, each thread should make available only a
-     * constant number of tasks.
-     *
-     * The minimum useful constant is just 1. But using a value of 1
-     * would require immediate replenishment upon each steal to
-     * maintain enough tasks, which is infeasible.  Further,
-     * partitionings/granularities of offered tasks should minimize
-     * steal rates, which in general means that threads nearer the top
-     * of computation tree should generate more than those nearer the
-     * bottom. In perfect steady state, each thread is at
-     * approximately the same level of computation tree. However,
-     * producing extra tasks amortizes the uncertainty of progress and
-     * diffusion assumptions.
-     *
-     * So, users will want to use values larger (but not much larger)
-     * than 1 to both smooth over transient shortages and hedge
-     * against uneven progress; as traded off against the cost of
-     * extra task overhead. We leave the user to pick a threshold
-     * value to compare with the results of this call to guide
-     * decisions, but recommend values such as 3.
-     *
-     * When all threads are active, it is on average OK to estimate
-     * surplus strictly locally. In steady-state, if one thread is
-     * maintaining say 2 surplus tasks, then so are others. So we can
-     * just use estimated queue length.  However, this strategy alone
-     * leads to serious mis-estimates in some non-steady-state
-     * conditions (ramp-up, ramp-down, other stalls). We can detect
-     * many of these by further considering the number of "idle"
-     * threads, that are known to have zero queued tasks, so
-     * compensate by a factor of (#idle/#active) threads.
-     */
-    static int getSurplusQueuedTaskCount() {
-        Thread t; FJWorkerThread wt; FJPool pool; WorkQueue q;
-        if (((t = Thread.currentThread()) instanceof FJWorkerThread) &&
-            (pool = (wt = (FJWorkerThread)t).pool) != null &&
-            (q = wt.workQueue) != null) {
-            int p = pool.mode & SMASK;
-            int a = p + (int)(pool.ctl >> RC_SHIFT);
-            int n = q.top - q.base;
-            return n - (a > (p >>>= 1) ? 0 :
-                        a > (p >>>= 1) ? 1 :
-                        a > (p >>>= 1) ? 2 :
-                        a > (p >>>= 1) ? 4 :
-                        8);
-        }
-        return 0;
     }
 
     // Termination
@@ -2399,17 +2241,6 @@ class FJPool extends AbstractExecutorService {
     }
 
     /**
-     * Removes and returns the next unexecuted submission if one is
-     * available.  This method may be useful in extensions to this
-     * class that re-assign work in systems with multiple pools.
-     *
-     * @return the next submission, or {@code null} if none
-     */
-    protected FJTask<?> pollSubmission() {
-        return pollScan(true);
-    }
-
-    /**
      * Returns a string identifying this pool, as well as its state,
      * including indications of run state, parallelism level, and
      * worker and task counts.
@@ -2595,14 +2426,6 @@ class FJPool extends AbstractExecutorService {
                     Thread.yield(); // cannot block
             }
         }
-    }
-
-    /**
-     * Waits and/or attempts to assist performing tasks indefinitely
-     * until the {@link #commonPool()} {@link #isQuiescent}.
-     */
-    static void quiesceCommonPool() {
-        common.awaitQuiescence(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
     }
 
     /**

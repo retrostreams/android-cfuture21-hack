@@ -671,18 +671,6 @@ abstract class FJTask<V> implements Future<V>, Serializable {
     }
 
     /**
-     * Completes this task normally without setting a value. The most
-     * recent value established by {@link #setRawResult} (or {@code
-     * null} by default) will be returned as the result of subsequent
-     * invocations of {@code join} and related operations.
-     *
-     * @since 1.8
-     */
-    final void quietlyComplete() {
-        setCompletion(NORMAL);
-    }
-
-    /**
      * Waits if necessary for the computation to complete, and then
      * retrieves its result.
      *
