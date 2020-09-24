@@ -2632,11 +2632,11 @@ public class CompletableFuture<T> implements Future<T>, CompletionStage<T> {
         return super.toString() +
             ((r == null)
              ? ((count == 0)
-                ? "[Not completed]"
-                : "[Not completed, " + count + " dependents]")
+                ? " [Not completed]"
+                : " [Not completed, " + count + " dependents]")
              : (((r instanceof AltResult) && ((AltResult)r).ex != null)
-                ? "[Completed exceptionally: " + ((AltResult)r).ex + "]"
-                : "[Completed normally]"));
+                ? " [Completed exceptionally: " + ((AltResult)r).ex + "]"
+                : " [Completed normally]"));
     }
 
     // jdk9 additions
