@@ -1,5 +1,5 @@
 [![Maven Central](https://img.shields.io/maven-central/v/net.sourceforge.streamsupport/android-cfuture21-hack.svg)](http://mvnrepository.com/artifact/net.sourceforge.streamsupport/android-cfuture21-hack)
-[![javadoc.io](https://javadocio-badges.herokuapp.com/net.sourceforge.streamsupport/android-cfuture21-hack/badge.svg)](http://www.javadoc.io/doc/net.sourceforge.streamsupport/android-cfuture21-hack/)
+[![javadoc.io](https://javadoc.io/badge2/net.sourceforge.streamsupport/android-cfuture21-hack/javadoc.svg)](https://javadoc.io/doc/net.sourceforge.streamsupport/android-cfuture21-hack)
 
 # android-cfuture21-hack
 
