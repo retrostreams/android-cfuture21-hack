@@ -39,4 +39,4 @@ dependencies {
 
 ## LICENSE
 
-GNU General Public License, version 2, [with the Classpath Exception](https://github.com/retrostreams/android-cfuture21-hack/blob/master/LICENSE)
+GNU General Public License, version 2, [with the Classpath Exception](https://github.com/retrostreams/android-cfuture21-hack/blob/master/LICENSE)  (and [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) for JSR-166 derived code)
