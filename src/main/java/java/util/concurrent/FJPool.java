@@ -1249,8 +1249,9 @@ class FJPool extends AbstractExecutorService {
         int tid = 0;                                    // for thread name
         int fifo = mode & FIFO;
         String prefix = workerNamePrefix;
-        if (prefix != null) {
-            synchronized (prefix) {
+        Object lock = prefix;
+        if (lock != null) {
+            synchronized (lock) {
                 WorkQueue[] ws = workQueues; int n;
                 int s = indexSeed += SEED_INCREMENT;
                 if (ws != null && (n = ws.length) > 1) {
