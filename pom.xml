@@ -3,7 +3,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>net.sourceforge.streamsupport</groupId>
 	<artifactId>android-cfuture21-hack</artifactId>
-	<version>1.0.3</version>
+	<version>1.0.4</version>
 	<name>net.sourceforge.streamsupport:android-cfuture21-hack</name>
 	<description>An unsupported hackish attempt to provide CompletableFuture on Android
  API level 21 to level 23 in conjunction with google/desugar_jdk_libs and Android Gradle
