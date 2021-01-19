@@ -127,7 +127,7 @@ import java.util.function.Supplier;
  * @since 1.8
  */
 public class CompletableFuture<T> implements Future<T>, CompletionStage<T> {
-// CVS rev. 1.222
+// CVS rev. 1.225
     /*
      * Overview:
      *
@@ -1923,7 +1923,7 @@ public class CompletableFuture<T> implements Future<T>, CompletionStage<T> {
                 break;
             else if (q == null) {
                 q = new Signaller(true, nanos, deadline);
-                if (Thread.currentThread() instanceof ForkJoinWorkerThread)
+                if (Thread.currentThread() instanceof FJWorkerThread)
                     FJPool.helpAsyncBlocker(defaultExecutor(), q);
             }
             else if (!queued)
@@ -1943,14 +1943,15 @@ public class CompletableFuture<T> implements Future<T>, CompletionStage<T> {
             if (r == null)
                 cleanStack();
         }
-        if (r == null && !interrupted)
-            throw new TimeoutException();
-        else if (r != null) {
+        if (r != null) {
             if (interrupted)
                 Thread.currentThread().interrupt();
             postComplete();
-        }
-        return r;
+            return r;
+        } else if (interrupted)
+            return null;
+        else
+            throw new TimeoutException();
     }
 
     /* ------------- public methods -------------- */
